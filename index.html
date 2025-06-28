@@ -1,0 +1,331 @@
+import React, { useState, useRef, useEffect } from 'react';
+
+// Komponen untuk ikon SVG kecil di bagian kontak
+const Icon = ({ path, className = "w-4 h-4 mr-2" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d={path} />
+  </svg>
+);
+
+
+// Komponen utama aplikasi CV Builder
+export default function App() {
+  // State untuk menyimpan semua data CV dari input pengguna
+  const [cvData, setCvData] = useState({
+    photo: 'https://placehold.co/400x400/e2e8f0/4a5568?text=Foto+Anda',
+    name: 'Rama Suryadi',
+    email: 'rama.suryadi@example.com',
+    phone: '+6281234567890',
+    linkedin: 'linkedin.com/in/rama-suryadi',
+    website: 'www.ramasuryadi.com',
+    address: 'Jakarta 16210',
+    summary: 'Arsitek berpengalaman dengan lebih dari 5 tahun dalam perencanaan, desain, dan pelaksanaan proyek arsitektur skala kecil hingga besar. Memiliki spesialisasi arsitektur berkelanjutan dan kemampuan untuk menghasilkan desain yang inovatif serta fungsional. Mampu bekerja sama dengan tim lintas disiplin untuk mencapai hasil yang optimal sesuai dengan kebutuhan klien.',
+    education: [
+      { id: 1, institution: 'Institut Teknologi Bandung', degree: 'Sarjana Arsitektur (S.Ars)', period: 'September 2015 - Agustus 2019', location: 'Bandung', gpa: '3.75/4.00', description: 'Tugas Akhir: Desain Gedung Ramah Lingkungan untuk Kawasan Perkotaan' }
+    ],
+    experience: [
+      { id: 1, company: 'PT Ipsum Lorem', role: 'Arsitek', period: 'Oktober 2019 - September 2024', location: 'Jakarta', description: 'Merancang dan mengawasi pembangunan proyek-proyek arsitektur komersial dan residensial. Bertanggung jawab atas penyusunan desain konsep hingga penyelesaian dokumen konstruksi, serta bekerja sama dengan tim teknik dan manajemen proyek. Proyek utama meliputi perancangan hotel bintang lima dan gedung perkantoran.' },
+      { id: 2, company: 'Stasiun Arsitek ABC', role: 'Asisten Arsitek', period: 'Agustus 2018 - September 2019', location: 'Bandung', description: 'Mendukung tim arsitek dalam pembuatan gambar kerja, analisis lokasi, dan presentasi desain kepada klien. Berperan dalam proyek desain rumah tinggal modern minimalis dan renovasi bangunan bersejarah.' }
+    ],
+    organization: [
+        { id: 1, name: 'Ikatan Arsitek Indonesia', role: 'Anggota', period: 'Februari 2020 - Sekarang', location: 'Jakarta', description: 'Berpartisipasi aktif dalam seminar dan diskusi terkait perkembangan dunia arsitektur di Indonesia.'}
+    ],
+    awards: [
+        { id: 1, name: 'Juara 1 Lomba Desain Arsitektur Nasional dari Asosiasi Arsitek Indonesia (2022)'}
+    ],
+    hardSkills: 'Autodesk AutoCAD, SketchUp, Revit, Adobe Photoshop, CorelDRAW',
+    softSkills: 'Kreativitas, Manajemen Proyek, Kerja Tim, Pemecahan Masalah',
+    softwareSkills: 'AutoCAD, SketchUp, Revit, Adobe Creative Suite',
+    hobbies: 'Fotografi Arsitektur',
+    languages: 'Bahasa Indonesia - Native, Bahasa Inggris - Fluent',
+    references: 'Hendra Wijaya, PT Ipsum Lorem | +6281234567891 | hendra.wijaya@ipsumlorem.com'
+  });
+  
+  // State dan Ref untuk fitur cropping dengan Cropper.js
+  const [upImg, setUpImg] = useState();
+  const imgRef = useRef(null);
+  const cropperRef = useRef(null); // Untuk menyimpan instance Cropper
+  const [isCropping, setIsCropping] = useState(false);
+
+
+  // Ref untuk menunjuk ke elemen preview CV yang akan di-render sebagai PDF
+  const cvPreviewRef = useRef(null);
+  // State untuk melacak status pemuatan library
+  const [librariesLoaded, setLibrariesLoaded] = useState(false);
+
+  // Efek untuk memuat semua library eksternal
+  useEffect(() => {
+    const loadStyle = (href) => {
+        if (!document.querySelector(`link[href="${href}"]`)) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            document.head.appendChild(link);
+        }
+    };
+    
+    const loadScript = (src) => {
+        return new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) {
+                resolve(); return;
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Gagal memuat skrip ${src}`));
+            document.body.appendChild(script);
+        });
+    };
+    
+    // Mengganti react-image-crop dengan Cropper.js dari cdnjs
+    loadStyle("https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css");
+
+    Promise.all([
+        // Memuat Cropper.js dari cdnjs (terbukti stabil)
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"),
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"),
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")
+    ]).then(() => {
+        setLibrariesLoaded(true); 
+    }).catch(error => console.error("Error loading libraries:", error));
+
+  }, []);
+
+  // Efek untuk menginisialisasi Cropper.js saat modal dibuka
+  useEffect(() => {
+    if (isCropping && imgRef.current) {
+        // Hancurkan instance sebelumnya jika ada untuk mencegah duplikasi
+        if (cropperRef.current) {
+            cropperRef.current.destroy();
+        }
+        // Inisialisasi Cropper.js pada elemen gambar
+        const cropper = new window.Cropper(imgRef.current, {
+            aspectRatio: 1, // Rasio 1:1 untuk foto lingkaran
+            viewMode: 1,
+            dragMode: 'move',
+            background: false,
+            autoCropArea: 0.9,
+            responsive: true,
+            modal: true,
+            guides: true,
+            center: true,
+            highlight: false,
+        });
+        cropperRef.current = cropper;
+    }
+  }, [isCropping, upImg]);
+
+
+  // Handler untuk mengubah data pada input teks biasa
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setCvData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handler untuk mengubah data pada bagian dinamis (pendidikan, pengalaman, dll)
+  const handleSectionChange = (section, index, e) => {
+    const { name, value } = e.target;
+    const updatedSection = [...cvData[section]];
+    updatedSection[index] = { ...updatedSection[index], [name]: value };
+    setCvData(prev => ({ ...prev, [section]: updatedSection }));
+  };
+
+  // Handler untuk menambah item baru ke sebuah section (pendidikan, pengalaman, dll.)
+  const addSectionItem = (section) => {
+    let newItem;
+    const newId = Date.now();
+    switch(section) {
+        case 'education': newItem = { id: newId, institution: '', degree: '', period: '', location: '', gpa: '', description: '' }; break;
+        case 'experience': newItem = { id: newId, company: '', role: '', period: '', location: '', description: '' }; break;
+        case 'organization': newItem = { id: newId, name: '', role: '', period: '', location: '', description: '' }; break;
+        case 'awards': newItem = { id: newId, name: '' }; break;
+        default: return;
+    }
+    setCvData(prev => ({ ...prev, [section]: [...prev[section], newItem] }));
+  };
+  
+  // Handler untuk menghapus item dari sebuah section
+  const removeSectionItem = (section, index) => {
+    const updatedSection = cvData[section].filter((_, i) => i !== index);
+    setCvData(prev => ({ ...prev, [section]: updatedSection }));
+  };
+  
+  // Handler untuk memilih file foto, membuka modal crop
+  const onSelectFile = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => setUpImg(reader.result.toString() || ''));
+      reader.readAsDataURL(e.target.files[0]);
+      setIsCropping(true); // Buka modal
+      e.target.value = null; // Reset input file
+    }
+  };
+
+  // Handler untuk menyimpan gambar yang sudah di-crop dari Cropper.js
+  const handleSaveCrop = () => {
+    if (cropperRef.current) {
+        // Menggambar canvas lingkaran dari hasil crop persegi
+        const croppedCanvas = cropperRef.current.getCroppedCanvas({
+            width: 400,
+            height: 400,
+            imageSmoothingQuality: 'high',
+        });
+        
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = 400;
+        finalCanvas.height = 400;
+        const ctx = finalCanvas.getContext('2d');
+
+        ctx.beginPath();
+        ctx.arc(200, 200, 200, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(croppedCanvas, 0, 0, 400, 400);
+
+        const dataUrl = finalCanvas.toDataURL('image/png');
+        setCvData(prev => ({ ...prev, photo: dataUrl }));
+        setIsCropping(false); // Tutup modal
+        cropperRef.current.destroy(); // Bersihkan instance Cropper
+        cropperRef.current = null;
+    }
+  };
+
+  // Handler untuk mencetak CV ke PDF
+  const handlePrintPdf = () => {
+    if (!librariesLoaded || !cvPreviewRef.current) {
+        console.error("Library PDF belum siap atau ref preview tidak tersedia.");
+        return;
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const input = cvPreviewRef.current;
+    
+    window.html2canvas(input, { scale: 2, useCORS: true, logging: false })
+      .then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' }); 
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const imgProps = pdf.getImageProperties(imgData);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+        pdf.save(`${cvData.name.replace(/\s+/g, '_')}_CV.pdf`);
+    });
+  };
+
+  if (!librariesLoaded) {
+    return <div className="flex justify-center items-center min-h-screen">Memuat aplikasi...</div>;
+  }
+
+  return (
+    <>
+      {/* Modal untuk cropping gambar */}
+      {isCropping && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
+            <h3 className="text-xl font-semibold mb-4">Potong & Sesuaikan Foto</h3>
+            <div className="flex justify-center bg-gray-200 p-2 rounded-md">
+              <div style={{ width: '100%', height: '40vh' }}>
+                <img ref={imgRef} src={upImg} style={{ display: 'block', maxWidth: '100%', maxHeight: '100%' }} />
+              </div>
+            </div>
+            <div className="flex justify-end mt-4 space-x-3">
+              <button onClick={() => setIsCropping(false)} className="px-4 py-2 rounded-md bg-gray-300 hover:bg-gray-400">Batal</button>
+              <button onClick={handleSaveCrop} className="px-4 py-2 rounded-md bg-orange-600 text-white hover:bg-orange-700">Simpan Foto</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-screen bg-gray-100 font-sans flex flex-col lg:flex-row">
+        {/* Kolom Kiri: Formulir Input */}
+        <div className="w-full lg:w-1/2 p-6 space-y-6 bg-white shadow-lg overflow-y-auto" style={{maxHeight: '100vh'}}>
+          <h2 className="text-2xl font-bold text-gray-800 border-b pb-2">Builder CV Interaktif</h2>
+          
+          <div className="p-4 border rounded-lg space-y-3 bg-gray-50">
+              <h3 className="font-semibold text-lg text-gray-700">Informasi Pribadi</h3>
+              <label className="block text-sm font-medium">Nama Lengkap: <input type="text" name="name" value={cvData.name} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500" /></label>
+              <label className="block text-sm font-medium">Foto Profil: <input type="file" accept="image/*" onChange={onSelectFile} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"/></label>
+              <label className="block text-sm font-medium">Email: <input type="email" name="email" value={cvData.email} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Telepon: <input type="tel" name="phone" value={cvData.phone} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Profil LinkedIn: <input type="text" name="linkedin" value={cvData.linkedin} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Website/Portofolio: <input type="text" name="website" value={cvData.website} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Alamat: <input type="text" name="address" value={cvData.address} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+          </div>
+
+          <div className="p-4 border rounded-lg space-y-3 bg-gray-50">
+              <h3 className="font-semibold text-lg text-gray-700">Ringkasan</h3>
+              <textarea name="summary" value={cvData.summary} onChange={handleChange} rows="5" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
+          </div>
+
+          {["education", "experience", "organization", "awards"].map(sectionName => (
+            <div key={sectionName} className="p-4 border rounded-lg space-y-4 bg-gray-50">
+                <h3 className="font-semibold text-lg text-gray-700 capitalize">{sectionName === 'education' ? 'Pendidikan' : sectionName === 'experience' ? 'Pengalaman Kerja' : sectionName === 'organization' ? 'Riwayat Organisasi' : 'Penghargaan'}</h3>
+                {cvData[sectionName].map((item, index) => (
+                    <div key={item.id} className="p-3 border rounded-md space-y-2 relative bg-white">
+                        {sectionName === 'awards' ? (
+                            <input type="text" name="name" placeholder="Nama Penghargaan" value={item.name} onChange={(e) => handleSectionChange(sectionName, index, e)} className="w-full rounded-md border-gray-300 shadow-sm" />
+                        ) : (
+                            <>
+                                <input type="text" name={sectionName === 'experience' ? 'role' : sectionName === 'organization' ? 'role' : 'degree'} placeholder={sectionName === 'experience' ? 'Posisi' : sectionName === 'organization' ? 'Peran/Jabatan' : 'Gelar'} value={item.role || item.degree} onChange={(e) => handleSectionChange(sectionName, index, e)} className="w-full font-semibold rounded-md border-gray-300 shadow-sm" />
+                                <input type="text" name={sectionName === 'experience' ? 'company' : sectionName === 'organization' ? 'name' : 'institution'} placeholder={sectionName === 'experience' ? 'Perusahaan' : sectionName === 'organization' ? 'Nama Organisasi' : 'Institusi'} value={item.company || item.name || item.institution} onChange={(e) => handleSectionChange(sectionName, index, e)} className="w-full rounded-md border-gray-300 shadow-sm" />
+                                <input type="text" name="period" placeholder="Periode" value={item.period} onChange={(e) => handleSectionChange(sectionName, index, e)} className="w-full rounded-md border-gray-300 shadow-sm" />
+                                {sectionName !== 'awards' && <textarea name="description" placeholder="Deskripsi singkat" value={item.description} onChange={(e) => handleSectionChange(sectionName, index, e)} className="w-full rounded-md border-gray-300 shadow-sm"></textarea>}
+                            </>
+                        )}
+                         <button onClick={() => removeSectionItem(sectionName, index)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-sm hover:bg-red-600">-</button>
+                    </div>
+                ))}
+                <button onClick={() => addSectionItem(sectionName)} className="bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">Tambah</button>
+            </div>
+          ))}
+          
+          <div className="p-4 border rounded-lg space-y-3 bg-gray-50">
+              <h3 className="font-semibold text-lg text-gray-700">Keahlian & Info Lainnya</h3>
+              <label className="block text-sm font-medium">Hard Skills (pisahkan dengan koma): <input type="text" name="hardSkills" value={cvData.hardSkills} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Soft Skills (pisahkan dengan koma): <input type="text" name="softSkills" value={cvData.softSkills} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Software Skills (pisahkan dengan koma): <input type="text" name="softwareSkills" value={cvData.softwareSkills} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Hobi: <input type="text" name="hobbies" value={cvData.hobbies} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Bahasa: <input type="text" name="languages" value={cvData.languages} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+              <label className="block text-sm font-medium">Referensi: <input type="text" name="references" value={cvData.references} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" /></label>
+          </div>
+        </div>
+
+        {/* Kolom Kanan: Pratinjau CV */}
+        <div className="w-full lg:w-1/2 p-8 bg-gray-200 flex flex-col justify-start items-center overflow-y-auto" style={{maxHeight: '100vh'}}>
+          <button onClick={handlePrintPdf} disabled={!librariesLoaded} className="mb-4 bg-green-600 text-white py-2 px-6 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors shadow-lg flex items-center">
+              <Icon path="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6 18.25m0-4.421l.754-.42a42.453 42.453 0 0110.56 0m-10.56 0L6 18.25m0-4.421l.754-.42a42.453 42.453 0 0110.56 0" className="w-5 h-5 mr-2" />
+              {librariesLoaded ? 'Cetak sebagai PDF' : 'Memuat...'}
+          </button>
+
+          <div ref={cvPreviewRef} className="w-full max-w-4xl bg-white shadow-2xl flex" style={{fontFamily: "'Helvetica Neue', 'Helvetica', 'Arial', sans-serif", aspectRatio: '1 / 1.414'}}>
+            {/* Kolom Kiri - Konten Utama */}
+            <div className="w-[67%] p-8 text-gray-800 text-sm">
+                <div className="mb-6"><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Ringkasan</h2><p className="text-xs leading-relaxed">{cvData.summary}</p></div>
+                <div className="mb-6"><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Pendidikan</h2>{cvData.education.map(edu => (<div key={edu.id} className="mb-4"><div className="flex justify-between items-start"><h3 className="font-bold text-sm">{edu.degree}</h3><p className="text-xs font-semibold text-gray-600">{edu.period}</p></div><p className="text-xs italic">{edu.institution}</p><p className="text-xs text-gray-600 mt-1">{edu.description}</p></div>))}</div>
+                <div className="mb-6"><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Pengalaman Kerja</h2>{cvData.experience.map(exp => (<div key={exp.id} className="mb-4"><div className="flex justify-between items-start"><h3 className="font-bold text-sm">{exp.role}</h3><p className="text-xs font-semibold text-gray-600">{exp.period}</p></div><div className="flex justify-between items-start"><p className="text-xs italic">{exp.company}</p><p className="text-xs text-gray-600">{exp.location}</p></div><p className="text-xs leading-relaxed mt-2">{exp.description}</p></div>))}</div>
+                <div className="mb-6"><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Riwayat Organisasi</h2>{cvData.organization.map(org => (<div key={org.id} className="mb-4"><div className="flex justify-between items-start"><h3 className="font-bold text-sm">{org.role}</h3><p className="text-xs font-semibold text-gray-600">{org.period}</p></div><div className="flex justify-between items-start"><p className="text-xs italic">{org.name}</p><p className="text-xs text-gray-600">{org.location}</p></div><p className="text-xs leading-relaxed mt-2">{org.description}</p></div>))}</div>
+                <div className="mb-6"><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Penghargaan</h2>{cvData.awards.map(award => (<div key={award.id} className="mb-2"><p className="text-xs list-item ml-4">{award.name}</p></div>))}</div>
+                <div className="mb-6"><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Bahasa</h2><p className="text-xs">{cvData.languages}</p></div>
+                <div><h2 className="text-base font-bold tracking-widest uppercase border-b-2 border-gray-300 pb-1 mb-3">Referensi</h2><p className="text-xs">{cvData.references}</p></div>
+            </div>
+            {/* Kolom Kanan - Info Kontak & Keahlian */}
+            <div className="w-[33%] bg-orange-600 text-white p-6">
+                 <img src={cvData.photo} alt="Profile" className="w-32 h-32 rounded-full mx-auto mb-4 object-cover border-4 border-white/80" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/400x400/e2e8f0/4a5568?text=Foto' }} />
+                 <h1 className="text-2xl font-bold text-center break-words">{cvData.name}</h1>
+                 <div className="mt-8 text-xs space-y-3">
+                     <div className="flex items-start"><Icon path="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /><span className="break-all">{cvData.email}</span></div>
+                      <div className="flex items-start"><Icon path="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /><span>{cvData.phone}</span></div>
+                      <div className="flex items-start"><Icon path="M12.232 4.232a2.25 2.25 0 013.536 0l.92 1.01a2.25 2.25 0 01.364 1.442V18a2.25 2.25 0 01-2.25 2.25h-8.25a2.25 2.25 0 01-2.25-2.25v-9.528a2.25 2.25 0 01.364-1.442l.92-1.01a2.25 2.25 0 013.536 0l2.472 2.688z" /><span className="break-all">{cvData.linkedin}</span></div>
+                      <div className="flex items-start"><Icon path="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A11.953 11.953 0 0112 16.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253" /><span className="break-all">{cvData.website}</span></div>
+                      <div className="flex items-start"><Icon path="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /><span>{cvData.address}</span></div>
+                 </div>
+                 <hr className="my-6 border-t border-white/50" />
+                 <div className="text-xs space-y-3"><h3 className="font-bold uppercase tracking-wider mb-2">Keahlian</h3><div><h4 className="font-semibold">Hard Skills</h4><p>{cvData.hardSkills}</p></div><div><h4 className="font-semibold">Soft Skills</h4><p>{cvData.softSkills}</p></div><div><h4 className="font-semibold">Software Skills</h4><p>{cvData.softwareSkills}</p></div></div>
+                 <hr className="my-6 border-t border-white/50" /><div className="text-xs"><h3 className="font-bold uppercase tracking-wider mb-2">Hobi</h3><p>{cvData.hobbies}</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
